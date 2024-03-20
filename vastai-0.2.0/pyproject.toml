@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools==61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vastai"
+version = "0.2.0"
+authors = [
+  { name="vast.ai", email="support@vast.ai" },
+]
+description = "Vast.ai Python CLI"
+readme = "README.md"
+requires-python = ">=3.7"
+keywords=["CLI", "Vast.ai", "vast.ai", "vast", "vastai"]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies=["requests"]
+
+
+[project.urls]
+"Homepage" = "https://github.com/vast-ai/vast-python"
+"Bug Tracker" = "https://github.com/vast-ai/vast-python/issues"

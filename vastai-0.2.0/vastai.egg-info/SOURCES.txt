@@ -1,0 +1,14 @@
+LICENSE.txt
+MANIFEST.in
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+vastai/__init__.py
+vastai/vast.py
+vastai.egg-info/PKG-INFO
+vastai.egg-info/SOURCES.txt
+vastai.egg-info/dependency_links.txt
+vastai.egg-info/entry_points.txt
+vastai.egg-info/requires.txt
+vastai.egg-info/top_level.txt
