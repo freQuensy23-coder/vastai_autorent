@@ -1,36 +1,163 @@
 import subprocess
 import re
-
-
-def pickup_first_available_gpu():
+import paramiko
+from loguru import logger
+def pickup_first_available_gpu(index_of_gpu):
     # Define the command
-    cmd = """vastai search offers 'reliability > 0.98 num_gpus=1 gpu_name=RTX_3090 rented=False'"""
+    cmd = """vastai search offers 'dph < 0.6 num_gpus=1 gpu_name=RTX_A6000 rented=False'"""
 
     # Run the command and capture output
     output = subprocess.check_output(cmd, shell=True, text=True)
 
-    print('output is ', output)
+    print('output is \n', output)
     # Parse the output to extract the IDs
     ids = re.findall(r'^(\d+)', output, re.MULTILINE)
 
     # Select the first ID
     if ids:
-        first_id = ids[0]
-        print("First ID:", first_id)
+        first_id = ids[index_of_gpu]
+        print(f"{index_of_gpu} ID:", first_id)
     else:
         print("No IDs found in the output.")
 
     return first_id
 
 
+# cmd = f"""vastai create instance {first_id} --image openziti/zrok --ssh --direct --env '-e ZROK_ENABLE_TOKEN=GkaGItMPbZ
+#     -e ZROK_UNIQUE_NAME=new_vast_instance' --onstart-cmd 'apt-get update && apt install wget && wget https://github.com/ollama/ollama/releases/download/v0.1.28/ollama-linux-amd64 && cd ollama-linux-amd64 && ./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K
+# && ./ollama-linux-amd64 serve & && zrok share public localhost:11434'"""
 def rent_gpu_by_id(first_id):
-    cmd = f"""vastai create instance {first_id} --image openziti/zrok --ssh --direct --env '-e ZROK_ENABLE_TOKEN=GkaGItMPbZ' --onstart-cmd 'apt-get update && apt install wget && wget https://github.com/ollama/ollama/releases/download/v0.1.28/ollama-linux-amd64 && cd ollama-linux-amd64 && ./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K
-&& ./ollama-linux-amd64 serve & && zrok share public localhost:11434'"""
+    cmd = f"""vastai create instance {first_id} --image pytorch/pytorch --disk 40 --env '-p 8081:80801/udp -h billybob' --ssh --direct --onstart-cmd "env | grep _ >> /etc/environment; echo 'starting up'";"""
     output = subprocess.check_output(cmd, shell=True, text=True)
+    index_of_gpu = 1
+    while 'no_such_ask' in output:
+        ID_instance = pickup_first_available_gpu(index_of_gpu)
+        cmd = f"""vastai create instance {ID_instance} --image pytorch/pytorch --disk 40 --env '-p 8081:80801/udp -h billybob' --ssh --direct --onstart-cmd "env | grep _ >> /etc/environment; echo 'starting up'";"""
+        output = subprocess.check_output(cmd, shell=True, text=True)
+        print('output is ', output)
+    print("GPU was successfully rented!")
 
-    print('output is ', output)
+
+def get_current_machines():
+    cmd = f"""vastai show instances"""
+    output = subprocess.check_output(cmd, shell=True, text=True)
+    print("output is ", output)
+    # Регулярное выражение для извлечения значений SSH Addr и SSH Port
+    elements = output.split('\n')
+    if len(elements) < 2:
+        return None
+    # Нахождение индексов элементов 'SSH Addr' и 'SSH Port'
+    parameters_of_machine = re.split('\s+', elements[1])
+    ssh_addr = parameters_of_machine[9]
+    ssh_port = parameters_of_machine[10]
+
+    # Формирование строки из значений SSH Addr и SSH Port, разделенных пробелами
+    result = f"{ssh_addr} {ssh_port}"
+    print("Values of SSH Addr and SSH Port:", result)
+    return ssh_addr, ssh_port
+
+INSTALL_ZROK_COMMAND = """(set -euo pipefail;
+
+curl -sSLf https://get.openziti.io/tun/package-repos.gpg \
+| sudo gpg --dearmor --output /usr/share/keyrings/openziti.gpg;
+sudo chmod a+r /usr/share/keyrings/openziti.gpg;
+
+sudo tee /etc/apt/sources.list.d/openziti-release.list >/dev/null <<EOF;
+deb [signed-by=/usr/share/keyrings/openziti.gpg] https://packages.openziti.org/zitipax-openziti-deb-stable debian main
+EOF
+
+sudo apt update;
+sudo apt install zrok;
+zrok version;
+)"""
+RESERVED_ZROK_SHARE = "ll5jyg6gke9v"
+def connect_to_server(ssh_addr, ssh_port):
+    # Подключение к удаленному серверу по SSH
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    # Указание пути до приватного ключа
+    private_key_path = '/home/peter/.ssh/id_rsa'
+
+    # Загрузка приватного ключа
+    private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
+    ssh_client.connect(hostname=ssh_addr, port=ssh_port, username='root', pkey=private_key)
+
+    # Выполнение команды на удаленном сервере
+    commands = [
+        "apt update && apt install wget",
+        "wget --continue https://github.com/ollama/ollama/releases/download/v0.1.28/ollama-linux-amd64",
+        "sudo chmod +x ollama-linux-amd64",
+        "tmux new-session -d -s ollama_session './ollama-linux-amd64 serve'",
+        "./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K",
+        INSTALL_ZROK_COMMAND,
+        "zrok enable RWK9kvv7kcIS",
+        "zrok reserve public --backend-mode web rent_gpu"
+        # f"zrok share reserved {RESERVED_ZROK_SHARE} localhost:11434"
+    ]
+
+    last_command = "zrok share reserved %s localhost:11434"
+    # Выполнение команд
+    for command in commands:
+        logger.info(f"Executing command: {command}")
+        stdin, stdout, stderr = ssh_client.exec_command(command)
+
+        # Ожидание завершения выполнения команды
+        exit_status = stdout.channel.recv_exit_status()
+
+        # Проверка успешности выполнения команды
+        if exit_status != 0:
+            logger.error(f"Command '{command}' failed with exit code {exit_status}")
+        else:
+            logger.info(f"Command '{command}' executed successfully")
+            result_last_command = stdout.read().decode('utf-8')
+            logger.info(f"stdout of the following command is {result_last_command}")
+            if 'share token is ' in result_last_command:
+                print("'share token is ' in result_last_command")
+                # commands[-1] = commands[-1].s + commands[-1].split(' ') result_last_command.split("share token is ")[1]
 
 
+
+    stdin, stdout, stderr = ssh_client.exec_command(command)
+
+    # Получение результатов выполнения команды
+    print("Output of the command:")
+    for line in stdout:
+        print(line.strip())
+
+    # Закрытие SSH-соединения
+    ssh_client.close()
+
+def wait_until_machine_started():
+    cmd = f"""vastai show instances"""
+    output = subprocess.check_output(cmd, shell=True, text=True)
+    print("output is ", output)
+    # Регулярное выражение для извлечения значений SSH Addr и SSH Port
+    elements = output.split('\n')
+    if len(elements) < 2:
+        return None
+    # Нахождение индексов элементов 'SSH Addr' и 'SSH Port'
+    parameters_of_machine = re.split('\s+', elements[1])
+    status = parameters_of_machine[2]
+    while status != "running":
+        sleep(2)
+        cmd = f"""vastai show instances"""
+        output = subprocess.check_output(cmd, shell=True, text=True)
+        print("output is ", output)
+        # Регулярное выражение для извлечения значений SSH Addr и SSH Port
+        elements = output.split('\n')
+        if len(elements) < 2:
+            return None
+        # Нахождение индексов элементов 'SSH Addr' и 'SSH Port'
+        parameters_of_machine = re.split('\s+', elements[1])
+        status = parameters_of_machine[2]
+        ID_INSTANCE = parameters_of_machine[0]
+    sleep(2)
+    logger.info(f"instance {ID_INSTANCE} successfully started")
+
+from time import sleep
 if __name__ == "__main__":
-    first_id = pickup_first_available_gpu()
+    first_id = pickup_first_available_gpu(0)
     rent_gpu_by_id(first_id)
+    ssh_addr, ssh_port = get_current_machines()
+    wait_until_machine_started() #TODO wait until status is running
+    connect_to_server(ssh_addr, ssh_port)
