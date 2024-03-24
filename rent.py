@@ -26,6 +26,12 @@ def pickup_first_available_gpu(index_of_gpu):
 # cmd = f"""vastai create instance {first_id} --image openziti/zrok --ssh --direct --env '-e ZROK_ENABLE_TOKEN=GkaGItMPbZ
 #     -e ZROK_UNIQUE_NAME=new_vast_instance' --onstart-cmd 'apt-get update && apt install wget && wget https://github.com/ollama/ollama/releases/download/v0.1.28/ollama-linux-amd64 && cd ollama-linux-amd64 && ./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K
 # && ./ollama-linux-amd64 serve & && zrok share public localhost:11434'"""
+from config import VASTAPIKey
+def activate_vastai_env():
+    cmd = f"""vastai set api-key {VASTAPIKey}"""
+    output = subprocess.check_output(cmd, shell=True, text=True)
+    print('output is ', output)
+
 def rent_gpu_by_id(first_id):
     cmd = f"""vastai create instance {first_id} --image pytorch/pytorch --disk 40 --env '-p 8081:80801/udp -h billybob' --ssh --direct --onstart-cmd "env | grep _ >> /etc/environment; echo 'starting up'";"""
     output = subprocess.check_output(cmd, shell=True, text=True)
@@ -168,6 +174,7 @@ def wait_until_machine_started():
 
 
 def rent_and_setup_new_llm():
+    activate_vastai_env()
     first_id = pickup_first_available_gpu(0)
     rent_gpu_by_id(first_id)
     ssh_addr, ssh_port = get_current_machines()
