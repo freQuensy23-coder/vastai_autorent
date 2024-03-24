@@ -18,18 +18,18 @@ def url_unaccessible(url):
 
 
 # Example usage:
-url_to_check = "https://ec5ye5oa230o.share.zrok.io/"
+url_to_check = "https://ray-evolved-gannet.ngrok-free.app"
 # url_unaccessible(url_to_check)
-from rent import pickup_first_available_gpu, rent_gpu_by_id
+
+from rent import pickup_first_available_gpu, rent_gpu_by_id, rent_and_setup_new_llm
 from sqlite import LinksTable
 if __name__ == "__main__":
     link_table = LinksTable()
     link_table.create_table()
     link_table.insert_link(url_to_check)
-    links = link_table.execute_query("SELECT links FROM links_gpu").fetchall()
+    links = link_table.execute_query("SELECT links FROM links_gpu")[0]
     for link in links:
         logger.info(f"link is {link}")
         if url_unaccessible(link):
-            first_id = pickup_first_available_gpu()
-            rent_gpu_by_id(first_id)
+            rent_and_setup_new_llm()
 

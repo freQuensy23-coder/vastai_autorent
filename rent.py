@@ -71,6 +71,11 @@ sudo apt install zrok;
 zrok version;
 )"""
 RESERVED_ZROK_SHARE = "ll5jyg6gke9v"
+INSTALL_NGROK_CMD = """curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+  | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+  | sudo tee /etc/apt/sources.list.d/ngrok.list && sudo apt update && sudo apt install ngrok"""
+NGROK_ADD_CONF = """ngrok config add-authtoken 2dUJKE28M9vgc9XHCJmzqVTDN9q_2AsRQEE5oguRgyWCCcXF3"""
+
 def connect_to_server(ssh_addr, ssh_port):
     # Подключение к удаленному серверу по SSH
     ssh_client = paramiko.SSHClient()
@@ -89,10 +94,9 @@ def connect_to_server(ssh_addr, ssh_port):
         "sudo chmod +x ollama-linux-amd64",
         "tmux new-session -d -s ollama_session './ollama-linux-amd64 serve'",
         "./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K",
-        INSTALL_ZROK_COMMAND,
-        "zrok enable RWK9kvv7kcIS",
-        "zrok reserve public --backend-mode web rent_gpu"
-        # f"zrok share reserved {RESERVED_ZROK_SHARE} localhost:11434"
+        INSTALL_NGROK_CMD,
+        NGROK_ADD_CONF,
+        "ngrok http --domain=ray-evolved-gannet.ngrok-free.app 11434"
     ]
 
     last_command = "zrok share reserved %s localhost:11434"
@@ -107,12 +111,19 @@ def connect_to_server(ssh_addr, ssh_port):
         # Проверка успешности выполнения команды
         if exit_status != 0:
             logger.error(f"Command '{command}' failed with exit code {exit_status}")
+            print("Output of the command:")
+            for line in stderr:
+                print(line.strip())
         else:
             logger.info(f"Command '{command}' executed successfully")
             result_last_command = stdout.read().decode('utf-8')
             logger.info(f"stdout of the following command is {result_last_command}")
-            if 'share token is ' in result_last_command:
-                print("'share token is ' in result_last_command")
+            print("Output of the command:")
+            for line in stdout:
+                print(line.strip())
+
+            # if 'share token is ' in result_last_command:
+            #     print("'share token is ' in result_last_command")
                 # commands[-1] = commands[-1].s + commands[-1].split(' ') result_last_command.split("share token is ")[1]
 
 
@@ -137,6 +148,7 @@ def wait_until_machine_started():
         return None
     # Нахождение индексов элементов 'SSH Addr' и 'SSH Port'
     parameters_of_machine = re.split('\s+', elements[1])
+    ID_INSTANCE = parameters_of_machine[0]
     status = parameters_of_machine[2]
     while status != "running":
         sleep(2)
@@ -154,10 +166,20 @@ def wait_until_machine_started():
     sleep(2)
     logger.info(f"instance {ID_INSTANCE} successfully started")
 
-from time import sleep
-if __name__ == "__main__":
+
+def rent_and_setup_new_llm():
     first_id = pickup_first_available_gpu(0)
     rent_gpu_by_id(first_id)
     ssh_addr, ssh_port = get_current_machines()
     wait_until_machine_started() #TODO wait until status is running
     connect_to_server(ssh_addr, ssh_port)
+
+# def rent_and_setup_new_llm_by_id(first_id):
+#     ssh_addr, ssh_port = get_current_machines()
+#     wait_until_machine_started() #TODO wait until status is running
+#     connect_to_server(ssh_addr, ssh_port)
+
+
+from time import sleep
+if __name__ == "__main__":
+    rent_and_setup_new_llm()

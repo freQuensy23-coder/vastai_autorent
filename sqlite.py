@@ -5,8 +5,7 @@ from config import DB_NAME
 class SQLiteManager:
     def __init__(self):
         self.db_name = DB_NAME
-        self.connection = None
-        self.cursor = None
+        self.connect()
 
     def connect(self):
         try:
@@ -23,6 +22,7 @@ class SQLiteManager:
 
     def create_table(self, table_name, columns):
         try:
+
             create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns})"
             self.cursor.execute(create_table_query)
             self.connection.commit()
@@ -30,9 +30,9 @@ class SQLiteManager:
         except sqlite3.Error as e:
             print("Error creating table:", e)
 
-    def insert_into_table(self, table_name, values):
+    def insert_into_table(self, table_name, column_names, values):
         try:
-            insert_query = f"INSERT INTO {table_name} VALUES ({values})"
+            insert_query = f"INSERT INTO {table_name} ({column_names}) VALUES ({values})"
             self.cursor.execute(insert_query)
             self.connection.commit()
             print("Data inserted into table successfully")
@@ -44,8 +44,10 @@ class SQLiteManager:
             self.cursor.execute(query)
             self.connection.commit()
             print("Query executed successfully")
+            return self.cursor.fetchall()  # Возвращаем результат запроса
         except sqlite3.Error as e:
             print("Error executing query:", e)
+            return None  # Возвращаем None в случае ошибки
 
 
 class LinksTable(SQLiteManager):
@@ -56,7 +58,9 @@ class LinksTable(SQLiteManager):
         super().create_table("links_gpu", "links TEXT")
 
     def insert_link(self, link):
-        super().insert_into_table("links_gpu", f"'{link}'")
+        super().insert_into_table("links_gpu", "links", f"'{link}'")
 
     def execute_query(self, query):
-        super().execute_query(query)
+        # Вызываем метод execute_query родительского класса
+        # и возвращаем результат его выполнения
+        return super().execute_query(query)
