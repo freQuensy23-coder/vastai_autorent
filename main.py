@@ -1,28 +1,25 @@
 import requests
 from loguru import logger
+from rent import rent_and_setup_new_llm
+from sqlite import LinksTable
+
 
 def url_unaccessible(url):
     try:
         response = requests.get(url)
         if response.status_code == 200:
-            print("URL is accessible.")
+            logger.info("URL is accessible.")
             return 0
-            # Do something here if the status code is 200
         else:
-            print(f"URL is not accessible. Status code: {response.status_code}")
-            # Do something else here if the status code is not 200
+            logger.info(f"URL is not accessible. Status code: {response.status_code}")
             return 1
     except requests.ConnectionError:
-        print("Failed to connect to the URL.")
+        logger.info("Failed to connect to the URL.")
 
 
 
-# Example usage:
 url_to_check = "https://ray-evolved-gannet.ngrok-free.app"
-# url_unaccessible(url_to_check)
 
-from rent import pickup_first_available_gpu, rent_gpu_by_id, rent_and_setup_new_llm
-from sqlite import LinksTable
 if __name__ == "__main__":
     link_table = LinksTable()
     link_table.create_table()
