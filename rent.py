@@ -17,15 +17,12 @@ def pickup_first_available_gpu(index_of_gpu):
     if ids:
         first_id = ids[index_of_gpu]
         print(f"{index_of_gpu} ID:", first_id)
+        return first_id
     else:
         print("No IDs found in the output.")
 
-    return first_id
 
 
-# cmd = f"""vastai create instance {first_id} --image openziti/zrok --ssh --direct --env '-e ZROK_ENABLE_TOKEN=GkaGItMPbZ
-#     -e ZROK_UNIQUE_NAME=new_vast_instance' --onstart-cmd 'apt-get update && apt install wget && wget https://github.com/ollama/ollama/releases/download/v0.1.28/ollama-linux-amd64 && cd ollama-linux-amd64 && ./ollama-linux-amd64 pull mixtral:8x7b-instruct-v0.1-q6_K
-# && ./ollama-linux-amd64 serve & && zrok share public localhost:11434'"""
 from config import VASTAPIKey
 def activate_vastai_env():
     cmd = f"""vastai set api-key {VASTAPIKey}"""
@@ -62,32 +59,19 @@ def get_current_machines():
     print("Values of SSH Addr and SSH Port:", result)
     return ssh_addr, ssh_port
 
-INSTALL_ZROK_COMMAND = """(set -euo pipefail;
 
-curl -sSLf https://get.openziti.io/tun/package-repos.gpg \
-| sudo gpg --dearmor --output /usr/share/keyrings/openziti.gpg;
-sudo chmod a+r /usr/share/keyrings/openziti.gpg;
-
-sudo tee /etc/apt/sources.list.d/openziti-release.list >/dev/null <<EOF;
-deb [signed-by=/usr/share/keyrings/openziti.gpg] https://packages.openziti.org/zitipax-openziti-deb-stable debian main
-EOF
-
-sudo apt update;
-sudo apt install zrok;
-zrok version;
-)"""
-RESERVED_ZROK_SHARE = "ll5jyg6gke9v"
 INSTALL_NGROK_CMD = """curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
   | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
   | sudo tee /etc/apt/sources.list.d/ngrok.list && sudo apt update && sudo apt install ngrok"""
-NGROK_ADD_CONF = """ngrok config add-authtoken 2dUJKE28M9vgc9XHCJmzqVTDN9q_2AsRQEE5oguRgyWCCcXF3"""
+from config import NGROKToken
+NGROK_ADD_CONF = f"""ngrok config add-authtoken {NGROKToken}"""
 
 def connect_to_server(ssh_addr, ssh_port):
     # Подключение к удаленному серверу по SSH
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     # Указание пути до приватного ключа
-    private_key_path = '/home/peter/.ssh/id_rsa'
+    private_key_path = './id_rsa'
 
     # Загрузка приватного ключа
     private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
@@ -128,14 +112,7 @@ def connect_to_server(ssh_addr, ssh_port):
             for line in stdout:
                 print(line.strip())
 
-            # if 'share token is ' in result_last_command:
-            #     print("'share token is ' in result_last_command")
-                # commands[-1] = commands[-1].s + commands[-1].split(' ') result_last_command.split("share token is ")[1]
-
-
-
     stdin, stdout, stderr = ssh_client.exec_command(command)
-
     # Получение результатов выполнения команды
     print("Output of the command:")
     for line in stdout:
@@ -178,6 +155,7 @@ def rent_and_setup_new_llm():
     first_id = pickup_first_available_gpu(0)
     rent_gpu_by_id(first_id)
     ssh_addr, ssh_port = get_current_machines()
+    sleep(1000)
     wait_until_machine_started() #TODO wait until status is running
     connect_to_server(ssh_addr, ssh_port)
 
